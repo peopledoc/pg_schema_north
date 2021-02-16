@@ -1,2 +1,2 @@
 # pg_schema_north
-PostgreSQL schema deployùent tool for DDL and DML
+PostgreSQL schema deployment tool for DDL and DML
