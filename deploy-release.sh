@@ -9,6 +9,8 @@ set -eu -o pipefail
 pause_for_each=0
 resume_file=
 github_issue=
+github_organization=my-orga
+github_ddl_project=my-project
 base_folder=$(dirname "$(readlink -f "$0")")
 
 # Change application_name to avoid sending actions in DBA's mails
@@ -82,8 +84,6 @@ release=$2
 log_file="$base_folder/$project/$release/deploy.log"
 deploy_dir="$base_folder"/"$project"/"$release"
 global_dbs_test_dir="$base_folder"/global-db-properties/"$project"/
-datadog_url=""
-datadog_key=""
 
 # Generate a restore point appended by a timestamp in order to avoid same restore_point when we resume deployment
 restore_point=${project}-${release}-$(date +"%d-%m-%Y_%T")
@@ -99,40 +99,6 @@ function send_slack() {
       done
     fi
 }
-
-# This one is a subshell to not die if it fails... "set" is global and we don't want this
-function send_datadog() (
-    set +eu +o pipefail
-
-    if [ $# != 3 ]; then
-        echo "send_datadog function require 3 arguments:"
-        echo "title, text and alert type (error,warning,info,success)"
-        return
-    fi
-
-    JSON_STRING=$( jq -n \
-                  --arg host "$(hostname -f)" \
-                  --arg source_type_name "Postgres" \
-                  --arg release "release:${release}" \
-                  --arg project "project:${project}" \
-                  --arg env "env:${ENVIRONMENT_NAME}" \
-                  --arg title "$1" \
-                  --arg text "$2" \
-                  --arg alert_type "$3" \
-                  '{host: $host,  title: $title, text: $text, alert_type: $alert_type, source_type_name: "Postgres", tags: ["team:dba","tool:deploy-release",$release,$project,$env]}' )
-
-    if [ "$datadog_url" = "" ]; then
-        echo "Datadog integration disabled"
-    else
-        response=$(curl --silent  -X POST "https://api.${datadog_url}/api/v1/events?api_key=${datadog_key}" -H "Content-Type: application/json" -d "${JSON_STRING}")
-
-        if [ "$(echo "${response}" | jq --raw-output '.status')" != "ok" ]; then
-            echo "Error during sending event to datadog:"
-            echo "${response}" | jq .
-        fi
-    fi
-)
-
 
 function apply_sql() {
     sql_file="$@"
@@ -179,25 +145,25 @@ function apply_sql() {
 function github_post_comment()
 {
     # Parameter is an issue number, and a filename containing the message
-    jq -n --arg msg "$( cat $2 )" '{body: $msg}' | curl -s -XPOST -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/peopledoc/sql-ddl-migration/issues/$1/comments  -d @- > /dev/null
+    jq -n --arg msg "$( cat $2 )" '{body: $msg}' | curl -s -XPOST -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/$github_organization/$github_ddl_project/issues/$1/comments  -d @- > /dev/null
 }
 
 function github_close_issue()
 {
     # Parameter is an issue number
     # We do that only if there is one environment tag
-    count_envs=$(curl -s -XGET -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/peopledoc/sql-ddl-migration/issues/$1 | jq ".labels[].name" | grep -c "Env - ")
+    count_envs=$(curl -s -XGET -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/$github_organization/$github_ddl_project/issues/$1 | jq ".labels[].name" | grep -c "Env - ")
     if (( $count_envs > 1 )) ; then
         log "There is more than one env tag on this issue, not closing it"
     else
-        curl -s -XPOST -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/peopledoc/sql-ddl-migration/issues/$1 -d '{"state": "closed"}' > /dev/null
+        curl -s -XPOST -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/$github_organization/$github_ddl_project/issues/$1 -d '{"state": "closed"}' > /dev/null
     fi
 }
 
 function github_get_issue_title()
 {
     # Parameter is an issue number
-    curl -s -XGET -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/peopledoc/sql-ddl-migration/issues/$1 | jq '.title' --raw-output
+    curl -s -XGET -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/$github_organization/$github_ddl_project/issues/$1 | jq '.title' --raw-output
 }
 
 # Check that our configuration file exists

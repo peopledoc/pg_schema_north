@@ -11,16 +11,10 @@ mkdir "${RELEASE_DIR}/tests/"
 ln -s ../../versioning_objects/version-management-ddl.sql "${RELEASE_DIR}/${RELEASE}-0-version-ddl.sql"
 ln -s ../../../versioning_objects/tests/version_management-ddl.pg "${RELEASE_DIR}/tests/${RELEASE}-0-version-ddl.pg"
 
-DB_SPECIFIC=""
-if [[ "${PROJECT}" =~ ^(rh2|peopleask|novapostme)$ ]]; then
-  DB_SPECIFIC="COMMENT ON TABLE django_site IS 'version ${RELEASE}';"
-fi;
-
 cat << EOF > "${RELEASE_DIR}/${RELEASE}-1-version-dml.sql"
 BEGIN;
 -- force session_replication_role
 SET ROLE dba;
-${DB_SPECIFIC}
 SELECT begin_deploy_version('${LAST_RELEASE}', '${RELEASE}');
 COMMIT;
 EOF
@@ -29,7 +23,6 @@ cat << EOF > "${RELEASE_DIR}/${RELEASE}-z-version-dml.sql"
 BEGIN;
 -- force session_replication_role
 SET ROLE dba;
-${DB_SPECIFIC}
 COMMENT ON TABLE sql_version IS 'version ${RELEASE}';
 SELECT end_deploy_version('${RELEASE}');
 COMMIT;
