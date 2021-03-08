@@ -173,7 +173,7 @@ __________EOF
     for sql in `ls -1 *.sql`; do
         echo "** Applying $db/$delta/$sql"
         psql -d $db --set ON_ERROR_STOP=on -f $sql
-        python3 "${sql_check}" --uri "postgresql://:@:${PGPORT}/${DATABASE}" "$sql"
+        ## python3 "${sql_check}" --uri "postgresql://:@:${PGPORT}/${DATABASE}" "$sql"
     done
 
     # check the syntax of --meta-psql
