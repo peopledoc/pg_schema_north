@@ -1,0 +1,52 @@
+BEGIN;
+  SELECT plan(11);
+  SELECT is_empty('SELECT * FROM public.sql_version');
+
+  -- Test initial deployment
+  SELECT public.begin_deploy_version(NULL, '1.0');
+  SELECT is(version_num, '1.0') FROM public.sql_version;
+  SELECT is(run_by, session_user) FROM public.sql_version;
+  SELECT is(upper(deployment_period), 'infinity', 'Deployment in progress') FROM public.sql_version;
+  SELECT public.end_deploy_version('1.0');
+  SELECT isnt(upper(deployment_period), 'infinity', 'Deployment is finished') FROM public.sql_version;
+
+  -- Test an upgrade
+  SELECT public.begin_deploy_version('1.0', '1.1');
+  SELECT is(max(version_num), '1.1') FROM public.sql_version;
+  SELECT public.end_deploy_version('1.1');
+
+  -- Test an upgrade when someone has forgotten to deploy the previous version
+  SELECT throws_ok(
+    $$SELECT public.begin_deploy_version('1.2', '1.3')$$,
+    'P0001',
+    'The actual version is 1.1, you''re trying to upgrade from 1.2',
+    'A deployment should be rejected if the previous version hasn''t been deployed');
+
+  -- Ensure that a downgrade is not permitted
+  SELECT throws_ok(
+    $$SELECT public.begin_deploy_version('1.1', '1.0')$$,
+    'P0001',
+    'You''re trying to downgrade to 1.0, from 1.1',
+    'A downgrade should not be allowed');
+
+  -- Ensure that concurrent deployments are not allowed
+  SELECT public.begin_deploy_version('1.1', '1.2.1');
+  SELECT throws_ok(
+    $$SELECT public.begin_deploy_version('1.2.1', '1.3.0')$$,
+    'P0001',
+    'The version 1.2.1 is already in progress',
+    'Concurrent deployment should not be allowed');
+  SELECT public.end_deploy_version('1.2.1');
+
+  -- Ensure that numeric sort is used everywhere
+  SELECT lives_ok(
+    $$SELECT public.begin_deploy_version('1.2.1', '1.19.1')$$,
+    'Version numbers should be sorted numerically');
+  SELECT throws_ok(
+    $$SELECT public.end_deploy_version('1.19.2')$$,
+    'P0001',
+    'Cannot close a non-opened migration',
+    'It shouldn''t be possible to end a deployment not in progress');
+
+  SELECT finish();
+ROLLBACK;

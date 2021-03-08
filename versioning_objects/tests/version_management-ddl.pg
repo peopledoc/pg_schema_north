@@ -1,0 +1,31 @@
+BEGIN;
+
+    SELECT plan(19);
+    SELECT has_table('sql_version'::name);
+    SELECt has_check('sql_version'::name,'version_is_numeric'::name);
+    SELECT has_column('sql_version'::name, 'run_by'::name);
+    SELECT is(conname,'period_overlap') FROM pg_constraint WHERE conname='period_overlap' AND conrelid='sql_version'::regclass;
+    SELECT has_function('check_has_event_trigger_function'::name,'{}'::name[]);
+    SELECT is(md5(prosrc), '3f41060c15453f103b9d2bc00bec28fa') FROM pg_proc
+                WHERE proname = 'check_has_event_trigger_function' and pronamespace='public'::regnamespace;
+    SELECT hasnt_function('begin_deploy_version'::name,'{"text"}'::name[]);
+    SELECT has_function('begin_deploy_version'::name,'{"text","text"}'::name[]);
+    SELECT is(md5(prosrc), 'c54a96a4509d49eafffd2d25fc81f5c9') FROM pg_proc
+                WHERE proname = 'begin_deploy_version' and pronamespace='public'::regnamespace;
+    SELECT has_function('current_sql_version'::name,'{}'::name[]);
+    SELECT is(md5(prosrc), '217fa2209c2fe6b03128a5a4708ded16') FROM pg_proc
+                WHERE proname = 'current_sql_version' and pronamespace='public'::regnamespace;
+    SELECT has_function('current_setting_nofail'::name,'{"text"}'::name[]);
+    SELECT is(md5(prosrc), '1523417d1120b828388b66f539769c79') FROM pg_proc
+                WHERE proname = 'current_setting_nofail' and pronamespace='public'::regnamespace;
+    SELECT has_function('end_deploy_version'::name,'{"text"}'::name[]);
+    SELECT is(md5(prosrc), '98d0ea4db542ccbacd22eb433a81532e') FROM pg_proc
+                WHERE proname = 'end_deploy_version' and pronamespace='public'::regnamespace;
+    SELECT is(count(*)::integer, 0, 'No deployment should be in progress when testing') FROM sql_version WHERE upper(deployment_period)='infinity';
+    SELECT function_owner_is('public','regenerate_functions_on_command_end', ARRAY[]::text[], 'postgres');
+    SELECT is_definer('public','regenerate_functions_on_command_end', ARRAY[]::text[]);
+    SELECT is(count(*), 0::bigint, 'Current version isn''t closed') FROM sql_version WHERE upper(deployment_period) is null;
+    SELECT finish();
+
+ROLLBACK;
+
